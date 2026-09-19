@@ -16,6 +16,7 @@ RUN npm run db:generate -w @dregz/api
 RUN npm run build -w @dregz/api
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV API_URL=http://127.0.0.1:4000
+ENV DOCKER_BUILD=1
 RUN npm run build -w @dregz/web
 RUN mkdir -p apps/web/.next/standalone/apps/web/.next \
   && cp -r apps/web/public apps/web/.next/standalone/apps/web/public \

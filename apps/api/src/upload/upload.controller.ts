@@ -5,14 +5,18 @@ import {
   UploadedFile,
   UseInterceptors,
   Body,
+  PayloadTooLargeException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
+import { mkdirSync } from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { UploadService } from './upload.service';
 
-const uploadRoot = process.env.UPLOAD_DIR || './uploads';
+function uploadRoot() {
+  return process.env.UPLOAD_DIR || './uploads';
+}
 
 @Controller('upload')
 export class UploadController {
@@ -23,7 +27,13 @@ export class UploadController {
     FileInterceptor('file', {
       storage: diskStorage({
         destination: (_req, _file, cb) => {
-          cb(null, join(uploadRoot, 'tmp'));
+          const dest = join(uploadRoot(), 'tmp');
+          try {
+            mkdirSync(dest, { recursive: true });
+            cb(null, dest);
+          } catch (err) {
+            cb(err as Error, dest);
+          }
         },
         filename: (_req, file, cb) => {
           const ext = extname(file.originalname) || '';
@@ -32,6 +42,7 @@ export class UploadController {
       }),
       limits: {
         fileSize: 200 * 1024 * 1024,
+        files: 1,
       },
     }),
   )
@@ -40,6 +51,11 @@ export class UploadController {
     @UploadedFile() file: Express.Multer.File,
     @Body('guestName') guestName?: string,
   ) {
+    if (!file) {
+      throw new PayloadTooLargeException(
+        'Skedari mungon ose është më i madh se 200MB',
+      );
+    }
     return this.upload.upload(code, file, guestName);
   }
 }

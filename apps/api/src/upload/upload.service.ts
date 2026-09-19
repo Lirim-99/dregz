@@ -9,6 +9,7 @@ import { readFile, unlink } from 'fs/promises';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { EventsService } from '../events/events.service';
+import { UploadGate } from './upload.gate';
 
 const IMAGE_TYPES = new Set([
   'image/jpeg',
@@ -36,6 +37,7 @@ export class UploadService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly events: EventsService,
+    private readonly gate: UploadGate,
     config: ConfigService,
   ) {
     this.maxImage = Number(config.get('MAX_IMAGE_BYTES')) || 20 * 1024 * 1024;
@@ -43,6 +45,14 @@ export class UploadService {
   }
 
   async upload(
+    code: string,
+    file: Express.Multer.File,
+    guestName?: string,
+  ) {
+    return this.gate.run(() => this.uploadInner(code, file, guestName));
+  }
+
+  private async uploadInner(
     code: string,
     file: Express.Multer.File,
     guestName?: string,
@@ -92,8 +102,14 @@ export class UploadService {
 
       let thumbKey: string | null = null;
       if (type === 'image') {
-        const buffer = await readFile(this.storage.getAbsolutePath(storageKey));
-        thumbKey = await this.storage.createImageThumb(buffer);
+        try {
+          const buffer = await readFile(
+            this.storage.getAbsolutePath(storageKey),
+          );
+          thumbKey = await this.storage.createImageThumb(buffer);
+        } catch {
+          thumbKey = null;
+        }
       }
 
       const media = await this.prisma.media.create({

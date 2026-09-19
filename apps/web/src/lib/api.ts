@@ -1,6 +1,9 @@
 const TOKEN_KEY = 'dregz_admin_token';
 
+/** Public API origin for browser calls (required on Vercel so 100MB uploads bypass Vercel limits). */
 export function getApiBase(): string {
+  const fromEnv = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') || '';
+  if (fromEnv) return fromEnv;
   if (typeof window !== 'undefined') return '';
   return process.env.API_URL || 'http://localhost:4000';
 }
@@ -94,7 +97,46 @@ export async function fetchQr(code: string): Promise<{ url: string; dataUrl: str
   return res.json();
 }
 
-export function uploadFile(
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function isRetryableUploadError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message.toLowerCase();
+  return (
+    msg.includes('gabim rrjeti') ||
+    msg.includes('network') ||
+    msg.includes('timeout') ||
+    msg.includes('timed out') ||
+    msg.includes('abort')
+  );
+}
+
+/** Upload with automatic retries for flaky mobile networks. */
+export async function uploadFile(
+  code: string,
+  file: File,
+  guestName: string | undefined,
+  onProgress: (pct: number) => void,
+): Promise<MediaItem> {
+  let lastError: Error = new Error('Ngarkimi dështoi');
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await uploadFileOnce(code, file, guestName, onProgress);
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error('Ngarkimi dështoi');
+      if (!isRetryableUploadError(err) || attempt === 2) {
+        throw lastError;
+      }
+      onProgress(0);
+      await sleep(1500 * (attempt + 1));
+    }
+  }
+  throw lastError;
+}
+
+function uploadFileOnce(
   code: string,
   file: File,
   guestName: string | undefined,
@@ -102,12 +144,16 @@ export function uploadFile(
 ): Promise<MediaItem> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', `/api/upload/${encodeURIComponent(code)}`);
+    const url = `${getApiBase()}/api/upload/${encodeURIComponent(code)}`;
+    xhr.open('POST', url);
+    xhr.timeout = 15 * 60 * 1000; // 15 minutes for large videos
+
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) {
         onProgress(Math.round((e.loaded / e.total) * 100));
       }
     };
+
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
@@ -120,11 +166,15 @@ export function uploadFile(
           const body = JSON.parse(xhr.responseText);
           reject(new Error(formatApiMessage(body.message) || 'Ngarkimi dështoi'));
         } catch {
-          reject(new Error('Ngarkimi dështoi'));
+          reject(new Error(`Ngarkimi dështoi (${xhr.status})`));
         }
       }
     };
+
     xhr.onerror = () => reject(new Error('Gabim rrjeti'));
+    xhr.ontimeout = () => reject(new Error('Timeout — provo përsëri'));
+    xhr.onabort = () => reject(new Error('Ngarkimi u ndërpre'));
+
     const form = new FormData();
     form.append('file', file);
     if (guestName) form.append('guestName', guestName);

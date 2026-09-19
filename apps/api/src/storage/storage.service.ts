@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { mkdir, rename, unlink, writeFile, stat } from 'fs/promises';
+import { mkdir, rename, unlink, writeFile, stat, copyFile } from 'fs/promises';
 import { join, dirname } from 'path';
 import { existsSync } from 'fs';
 import sharp from 'sharp';
@@ -36,7 +36,13 @@ export class StorageService implements OnModuleInit {
     const storageKey = `originals/${uuidv4()}.${ext}`;
     const fullPath = this.getAbsolutePath(storageKey);
     await mkdir(dirname(fullPath), { recursive: true });
-    await rename(tempPath, fullPath);
+    try {
+      await rename(tempPath, fullPath);
+    } catch {
+      // Cross-device (e.g. Docker volume): copy then delete
+      await copyFile(tempPath, fullPath);
+      await unlink(tempPath);
+    }
     const info = await stat(fullPath);
     return { storageKey, size: info.size };
   }
@@ -78,6 +84,11 @@ export class StorageService implements OnModuleInit {
   }
 
   publicUrl(storageKey: string): string {
-    return `/uploads/${storageKey.replace(/\\/g, '/')}`;
+    const path = `/uploads/${storageKey.replace(/\\/g, '/')}`;
+    const base = (
+      this.config.get<string>('PUBLIC_API_URL') ||
+      ''
+    ).replace(/\/$/, '');
+    return base ? `${base}${path}` : path;
   }
 }

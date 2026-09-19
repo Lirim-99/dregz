@@ -7,6 +7,7 @@ import {
   deleteMedia,
   fetchMedia,
   fetchQr,
+  getApiBase,
   getToken,
   loginAdmin,
   setToken,
@@ -174,8 +175,8 @@ export default function AdminPage() {
           </button>
           <a
             className="btn btn-ghost"
-            href={`/api/qr/${EVENT_CODE}/image`}
-            download={`dregz-${EVENT_CODE}-qr.png`}
+            href={`${getApiBase()}/api/qr/${EVENT_CODE}/image`}
+            download={`dasma-${EVENT_CODE}-qr.png`}
             target="_blank"
             rel="noreferrer"
           >

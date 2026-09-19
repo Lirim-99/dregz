@@ -1,21 +1,35 @@
-# Si ta publikojmë Dregz (online)
+# Dasma Drenusha & Egzon — Deploy
 
-Kodi është në GitHub (privat): https://github.com/lirimh-myNime/dregz
+## Arkitektura (e rëndësishme për video 100MB)
 
-## Opsioni i rekomanduar: Railway (5–10 minuta)
+Vercel **nuk** mund të pranojë upload 100MB përmes proxy-t (limit ~4.5MB).
+Prandaj:
 
-1. Hap: https://railway.app/new  
-2. Hyr me **GitHub**  
-3. Zgjidh repo-n **dregz**  
-4. Railway e njeh `Dockerfile` automatikisht  
-5. Shto **Volume**:
-   - Mount path: `/data`
-   - Size: 5 GB (ose më shumë nëse pret shumë video)
-6. Te **Variables** shto:
+| Pjesa | Ku | URL |
+|--------|-----|-----|
+| Web (faqja + QR) | **Vercel** | `https://dasma-drenushes-dhe-egzonit.vercel.app` |
+| API + fotot/videot | **Railway** (Docker + disk `/data`) | `https://….up.railway.app` |
+
+Të ftuarit hapin Vercel. Uploadet shkojnë **direkt** te Railway (`NEXT_PUBLIC_API_URL`).
+
+## Stabilitet (2 persona × 100MB video)
+
+- Skedarët ruhen në disk (jo në RAM)
+- SQLite WAL + busy_timeout (shkrim i njëkohshëm)
+- Deri në 6 upload “finalize” paralel; stream i shumë klientëve në disk
+- Timeout 15 minuta për video të mëdha
+- Klienti riprovon automatikisht 3 herë në gabim rrjeti
+- Emri i përkohshëm unik për çdo skedar (pa mbivendosje)
+
+## 1) Railway (API) — së pari
+
+1. https://railway.app/new → GitHub → repo **dregz**
+2. Volume mount: `/data` (min. 5GB)
+3. Variables:
 
 ```
 ADMIN_PASSWORD=kosovarepublik99
-JWT_SECRET=vendos-dicka-te-gjate-dhe-te-rastit
+JWT_SECRET=ndryshoje-me-dicka-te-gjate
 EVENT_CODE=wedding
 EVENT_TITLE=Drenusha & Egzon
 DATA_DIR=/data
@@ -24,30 +38,38 @@ DATABASE_URL=file:/data/dregz.db
 API_PORT=4000
 API_URL=http://127.0.0.1:4000
 PORT=3000
+MAX_CONCURRENT_UPLOADS=6
+MAX_VIDEO_BYTES=209715200
+PUBLIC_API_URL=https://API-URL-JA-NGA-RAILWAY
+CORS_ORIGIN=https://dasma-drenushes-dhe-egzonit.vercel.app
+PUBLIC_WEB_URL=https://dasma-drenushes-dhe-egzonit.vercel.app
 ```
 
-7. Kliko **Generate Domain** (Settings → Networking)  
-8. Kopjo URL-në (p.sh. `https://dregz-production.up.railway.app`) dhe shto edhe:
+4. Generate Domain për shërbimin (kjo është `PUBLIC_API_URL`)
+
+> Në Railway, nëse Docker ekspozon portin 3000 (web+api së bashku),  
+> `PUBLIC_API_URL` = i njëjti domain Railway.  
+> Nëse deploy vetëm API, ekspozo portin e API.
+
+## 2) Vercel (web) — emri i bukur
+
+```bash
+cd apps/web
+npx vercel --name dasma-drenushes-dhe-egzonit --yes
+```
+
+Env në Vercel:
 
 ```
-PUBLIC_WEB_URL=https://URL-JA-JOTE
-CORS_ORIGIN=https://URL-JA-JOTE
+NEXT_PUBLIC_API_URL=https://API-URL-JA-NGA-RAILWAY
+NEXT_PUBLIC_EVENT_CODE=wedding
 ```
 
-9. Redeploy një herë që QR të përdorë URL-në e saktë  
+Production URL: **https://dasma-drenushes-dhe-egzonit.vercel.app**
 
-### Pas deploy
-- Të ftuarit: `https://URL-JA-JOTE`
-- Admin: `https://URL-JA-JOTE/admin`
-- Fjalëkalimi: `kosovarepublik99`
-- Printoni QR nga admin → **Shkarko QR**
+## 3) QR
 
-## Opsioni tjetër: Render
+Admin → https://dasma-drenushes-dhe-egzonit.vercel.app/admin  
+Fjalëkalimi: `kosovarepublik99` → Shkarko QR  
 
-1. Hap https://dashboard.render.com/select-repo?type=blueprint  
-2. Lidh GitHub → zgjidh **dregz** (ka `render.yaml`)  
-3. Vendos `PUBLIC_WEB_URL` dhe `CORS_ORIGIN` me domain-in që të jep Render  
-4. Disku `/data` ruan fotot
-
-## Shënim
-Fotot ruhen në disk (`/data`). Pa volume, fotot humbin kur ristartohet serveri.
+QR hap faqen Vercel (jo Railway).
