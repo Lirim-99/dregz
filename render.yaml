@@ -1,10 +1,10 @@
 services:
   - type: web
-    name: dregz
+    name: dasma-api
     runtime: docker
-    dockerfilePath: ./Dockerfile
+    dockerfilePath: ./Dockerfile.api
     plan: starter
-    healthCheckPath: /
+    healthCheckPath: /api/events/wedding
     envVars:
       - key: NODE_ENV
         value: production
@@ -14,25 +14,25 @@ services:
         value: /data/uploads
       - key: DATABASE_URL
         value: file:/data/dregz.db
-      - key: API_PORT
-        value: "4000"
-      - key: API_URL
-        value: http://127.0.0.1:4000
-      - key: PORT
-        value: "3000"
       - key: ADMIN_PASSWORD
         value: kosovarepublik99
       - key: EVENT_CODE
         value: wedding
       - key: EVENT_TITLE
         value: Drenusha & Egzon
+      - key: MAX_CONCURRENT_UPLOADS
+        value: "6"
+      - key: MAX_VIDEO_BYTES
+        value: "209715200"
       - key: JWT_SECRET
         generateValue: true
       - key: PUBLIC_WEB_URL
-        sync: false
+        value: https://dasma-drenushes-dhe-egzonit.vercel.app
       - key: CORS_ORIGIN
+        value: https://dasma-drenushes-dhe-egzonit.vercel.app,https://dasma-drenushes-dhe-egzonit-lirim-hasanis-projects.vercel.app
+      - key: PUBLIC_API_URL
         sync: false
     disk:
-      name: dregz-data
+      name: dasma-data
       mountPath: /data
-      sizeGB: 5
+      sizeGB: 10

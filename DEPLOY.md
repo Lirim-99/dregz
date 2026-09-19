@@ -1,75 +1,67 @@
-# Dasma Drenusha & Egzon — Deploy
+# Deploy — hapa të shkurtër (Railway + Vercel)
 
-## Arkitektura (e rëndësishme për video 100MB)
+## A) Railway = API + fotot/videot (bëje së pari)
 
-Vercel **nuk** mund të pranojë upload 100MB përmes proxy-t (limit ~4.5MB).
-Prandaj:
-
-| Pjesa | Ku | URL |
-|--------|-----|-----|
-| Web (faqja + QR) | **Vercel** | `https://dasma-drenushes-dhe-egzonit.vercel.app` |
-| API + fotot/videot | **Railway** (Docker + disk `/data`) | `https://….up.railway.app` |
-
-Të ftuarit hapin Vercel. Uploadet shkojnë **direkt** te Railway (`NEXT_PUBLIC_API_URL`).
-
-## Stabilitet (2 persona × 100MB video)
-
-- Skedarët ruhen në disk (jo në RAM)
-- SQLite WAL + busy_timeout (shkrim i njëkohshëm)
-- Deri në 6 upload “finalize” paralel; stream i shumë klientëve në disk
-- Timeout 15 minuta për video të mëdha
-- Klienti riprovon automatikisht 3 herë në gabim rrjeti
-- Emri i përkohshëm unik për çdo skedar (pa mbivendosje)
-
-## 1) Railway (API) — së pari
-
-1. https://railway.app/new → GitHub → repo **dregz**
-2. Volume mount: `/data` (min. 5GB)
-3. Variables:
+1. Në Railway: **New Project** → **Deploy from GitHub repo**
+2. Zgjidh repo-n **dregz** (llogaria `lirimh-myNime`)
+3. Nëse pyet për Dockerfile, zgjidh **Dockerfile.api**
+4. Shto **Volume**:
+   - Mount path: `/data`
+   - Size: **10 GB** (ose më shumë)
+5. **Settings → Networking → Generate Domain**  
+   Kopjo URL-në, p.sh. `https://dasma-api-production-xxxx.up.railway.app`
+6. **Variables** → shto këto (zëvendëso `API_URL_JOTE` me domain-in e hapit 5):
 
 ```
 ADMIN_PASSWORD=kosovarepublik99
-JWT_SECRET=ndryshoje-me-dicka-te-gjate
+JWT_SECRET=ndryshoje-me-nje-fjale-te-gjate-te-rastit
 EVENT_CODE=wedding
 EVENT_TITLE=Drenusha & Egzon
 DATA_DIR=/data
 UPLOAD_DIR=/data/uploads
 DATABASE_URL=file:/data/dregz.db
-API_PORT=4000
-API_URL=http://127.0.0.1:4000
-PORT=3000
 MAX_CONCURRENT_UPLOADS=6
 MAX_VIDEO_BYTES=209715200
-PUBLIC_API_URL=https://API-URL-JA-NGA-RAILWAY
-CORS_ORIGIN=https://dasma-drenushes-dhe-egzonit.vercel.app
 PUBLIC_WEB_URL=https://dasma-drenushes-dhe-egzonit.vercel.app
+CORS_ORIGIN=https://dasma-drenushes-dhe-egzonit.vercel.app
+PUBLIC_API_URL=https://API_URL_JOTE
 ```
 
-4. Generate Domain për shërbimin (kjo është `PUBLIC_API_URL`)
+7. **Redeploy** një herë pas Variables
+8. Test: hap `https://API_URL_JOTE/api/events/wedding`  
+   Duhet të shohësh: `{"code":"wedding","title":"Drenusha & Egzon",...}`
 
-> Në Railway, nëse Docker ekspozon portin 3000 (web+api së bashku),  
-> `PUBLIC_API_URL` = i njëjti domain Railway.  
-> Nëse deploy vetëm API, ekspozo portin e API.
+---
 
-## 2) Vercel (web) — emri i bukur
+## B) Vercel = faqja me emrin e bukur
 
-```bash
-cd apps/web
-npx vercel --name dasma-drenushes-dhe-egzonit --yes
-```
+URL e synuar: **https://dasma-drenushes-dhe-egzonit.vercel.app**
 
-Env në Vercel:
+Në Vercel → projekti **dasma-drenushes-dhe-egzonit** → **Settings → Environment Variables**:
 
 ```
-NEXT_PUBLIC_API_URL=https://API-URL-JA-NGA-RAILWAY
+NEXT_PUBLIC_API_URL=https://API_URL_JOTE
 NEXT_PUBLIC_EVENT_CODE=wedding
 ```
 
-Production URL: **https://dasma-drenushes-dhe-egzonit.vercel.app**
+Pastaj **Deployments → Redeploy** (Production).
 
-## 3) QR
+---
 
-Admin → https://dasma-drenushes-dhe-egzonit.vercel.app/admin  
-Fjalëkalimi: `kosovarepublik99` → Shkarko QR  
+## C) Kur të dyja janë gati
 
-QR hap faqen Vercel (jo Railway).
+- Të ftuarit: https://dasma-drenushes-dhe-egzonit.vercel.app  
+- Admin: https://dasma-drenushes-dhe-egzonit.vercel.app/admin  
+- Fjalëkalimi: `kosovarepublik99`  
+- Printoni QR nga admin
+
+---
+
+## Nëse përdor Render në vend të Railway
+
+1. **New → Blueprint** → lidh repo **dregz** (`render.yaml` është gati)
+2. Shërbimi `dasma-api` + disk `/data`
+3. Vendos `PUBLIC_API_URL` me domain-in që të jep Render
+4. Po ashtu vendos `NEXT_PUBLIC_API_URL` në Vercel
+
+**Këshillë:** bëj **vetëm një** (Railway OSE Render), jo të dyja.

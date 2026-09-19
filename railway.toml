@@ -1,8 +1,8 @@
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile"
+dockerfilePath = "Dockerfile.api"
 
 [deploy]
-healthcheckPath = "/"
-healthcheckTimeout = 30
+healthcheckPath = "/api/events/wedding"
+healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"

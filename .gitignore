@@ -14,3 +14,5 @@ apps/api/prisma/*.db-journal
 apps/api/prisma/*.db-shm
 apps/api/prisma/*.db-wal
 unnamed.jpg
+.vercel
+.env*
