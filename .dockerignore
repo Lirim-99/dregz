@@ -1,0 +1,17 @@
+node_modules
+**/node_modules
+.git
+.gitignore
+.next
+**/dist
+**/.env
+**/.env.local
+data
+uploads
+**/uploads
+*.db
+unnamed.jpg
+*.pdf
+README.md
+DEPLOY.md
+.cursor

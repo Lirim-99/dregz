@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: dregz
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_DIR
+        value: /data
+      - key: UPLOAD_DIR
+        value: /data/uploads
+      - key: DATABASE_URL
+        value: file:/data/dregz.db
+      - key: API_PORT
+        value: "4000"
+      - key: API_URL
+        value: http://127.0.0.1:4000
+      - key: PORT
+        value: "3000"
+      - key: ADMIN_PASSWORD
+        value: kosovarepublik99
+      - key: EVENT_CODE
+        value: wedding
+      - key: EVENT_TITLE
+        value: Drenusha & Egzon
+      - key: JWT_SECRET
+        generateValue: true
+      - key: PUBLIC_WEB_URL
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+    disk:
+      name: dregz-data
+      mountPath: /data
+      sizeGB: 5
