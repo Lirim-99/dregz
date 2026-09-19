@@ -3,7 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import { mkdir, rename, unlink, writeFile, stat, copyFile, readFile } from 'fs/promises';
 import { join, dirname } from 'path';
 import { existsSync } from 'fs';
-import sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
 import { put, del } from '@vercel/blob';
 
@@ -91,6 +90,9 @@ export class StorageService implements OnModuleInit {
 
   async createImageThumb(buffer: Buffer): Promise<string | null> {
     try {
+      // Dynamic import so a missing sharp binary does not crash boot
+      const sharpMod = await import('sharp');
+      const sharp = sharpMod.default;
       const thumbBuffer = await sharp(buffer)
         .rotate()
         .resize(480, 480, { fit: 'inside', withoutEnlargement: true })
@@ -111,7 +113,8 @@ export class StorageService implements OnModuleInit {
       await mkdir(dirname(fullPath), { recursive: true });
       await writeFile(fullPath, thumbBuffer);
       return key;
-    } catch {
+    } catch (err) {
+      console.warn('Thumb generation skipped:', err);
       return null;
     }
   }

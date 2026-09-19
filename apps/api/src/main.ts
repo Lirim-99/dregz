@@ -8,12 +8,7 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: false,
-    bodyParser: true,
   });
-
-  // Large video uploads need long-lived connections
-  app.useBodyParser('json', { limit: '2mb' });
-  app.useBodyParser('urlencoded', { limit: '2mb', extended: true });
 
   app.setGlobalPrefix('api');
   app.useGlobalPipes(
@@ -46,6 +41,12 @@ async function bootstrap() {
     });
   }
 
+  // Simple liveness for Render (no DB)
+  const httpAdapter = app.getHttpAdapter();
+  httpAdapter.get('/health', (_req: unknown, res: { status: (n: number) => { send: (s: string) => void } }) => {
+    res.status(200).send('ok');
+  });
+
   const port = Number(process.env.PORT) || 4000;
   await app.listen(port, '0.0.0.0');
 
@@ -59,4 +60,7 @@ async function bootstrap() {
   console.log(`API listening on http://0.0.0.0:${port}`);
 }
 
-bootstrap();
+bootstrap().catch((err) => {
+  console.error('Fatal bootstrap error:', err);
+  process.exit(1);
+});

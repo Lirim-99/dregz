@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -47,31 +47,18 @@ function run(command, args, cwd = apiDir) {
   });
 }
 
-async function ensureBuilt() {
-  let mainJs = resolveMainJs();
-  if (mainJs) {
-    console.log('Found API build at', mainJs);
-    return mainJs;
-  }
-  console.log('dist missing — building now…');
-  console.log('apiDir contents:', readdirSync(apiDir).join(', '));
-  await run('npx', ['prisma', 'generate']);
-  await run('npx', ['nest', 'build']);
-  mainJs = resolveMainJs();
-  if (!mainJs) {
-    throw new Error('Still missing dist/main.js after nest build');
-  }
-  return mainJs;
-}
-
 async function main() {
-  const mainJs = await ensureBuilt();
+  const mainJs = resolveMainJs();
+  if (!mainJs) {
+    throw new Error('Missing apps/api/dist/main.js — build step failed');
+  }
+  console.log('Found API build at', mainJs);
 
   console.log('DB push + seed…');
   await run('npx', ['prisma', 'db', 'push', '--skip-generate']);
   await run('npx', ['prisma', 'db', 'seed']);
 
-  console.log('Starting API on port', process.env.PORT, '→', mainJs);
+  console.log('Starting API on port', process.env.PORT);
   const child = spawn(process.execPath, [mainJs], {
     cwd: apiDir,
     env: process.env,

@@ -4,10 +4,12 @@ services:
     runtime: node
     plan: free
     region: frankfurt
-    buildCommand: npm ci --include=dev && cd apps/api && npx prisma generate && npx nest build && ls -la dist && (test -f dist/main.js || test -f dist/src/main.js)
+    buildCommand: npm ci --include=dev && cd apps/api && npx prisma generate && npx nest build && ls -la dist && test -f dist/main.js
     startCommand: node scripts/start-api.mjs
-    healthCheckPath: /api/events/wedding
+    healthCheckPath: /health
     envVars:
+      - key: NODE_VERSION
+        value: "22"
       - key: ADMIN_PASSWORD
         value: kosovarepublik99
       - key: EVENT_CODE
