@@ -1,0 +1,18 @@
+{
+  "name": "dregz",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev -w @dregz/web",
+    "dev:api": "npm run dev -w @dregz/api",
+    "build": "npm run build -w @dregz/api && npm run build -w @dregz/web",
+    "start:prod": "node scripts/start-prod.mjs",
+    "db:generate": "npm run db:generate -w @dregz/api",
+    "db:push": "npm run db:push -w @dregz/api",
+    "db:migrate": "npm run db:migrate -w @dregz/api",
+    "db:seed": "npm run db:seed -w @dregz/api",
+    "setup": "npm install && npm run db:generate && npm run db:push && npm run db:seed"
+  }
+}
