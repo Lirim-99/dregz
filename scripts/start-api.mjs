@@ -1,11 +1,12 @@
 import { spawn } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
 const apiDir = join(root, 'apps/api');
+const mainJs = join(apiDir, 'dist', 'main.js');
 
 const dataDir = process.env.DATA_DIR || join(root, 'data');
 const uploadDir = process.env.UPLOAD_DIR || join(dataDir, 'uploads');
@@ -24,32 +25,47 @@ process.env.CORS_ORIGIN =
   process.env.PUBLIC_WEB_URL ||
   'https://dasma-drenushes-dhe-egzonit.vercel.app';
 
-function run(command, args) {
+function run(command, args, cwd = apiDir) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
-      cwd: apiDir,
+      cwd,
       env: process.env,
       stdio: 'inherit',
-      shell: process.platform === 'win32',
+      shell: true,
     });
     child.on('exit', (code) => {
       if (code === 0) resolve();
-      else reject(new Error(`${command} exited ${code}`));
+      else reject(new Error(`${command} ${args.join(' ')} exited ${code}`));
     });
   });
 }
 
+async function ensureBuilt() {
+  if (existsSync(mainJs)) {
+    console.log('Found API build at', mainJs);
+    return;
+  }
+  console.log('dist/main.js missing — building now…');
+  console.log('apiDir contents:', readdirSync(apiDir).join(', '));
+  await run('npx', ['prisma', 'generate']);
+  await run('npx', ['nest', 'build']);
+  if (!existsSync(mainJs)) {
+    throw new Error(`Still missing ${mainJs} after nest build`);
+  }
+}
+
 async function main() {
+  await ensureBuilt();
+
   console.log('DB push + seed…');
   await run('npx', ['prisma', 'db', 'push', '--skip-generate']);
   await run('npx', ['prisma', 'db', 'seed']);
 
   console.log('Starting API on port', process.env.PORT);
-  const child = spawn('node', ['dist/main.js'], {
+  const child = spawn(process.execPath, [mainJs], {
     cwd: apiDir,
     env: process.env,
     stdio: 'inherit',
-    shell: process.platform === 'win32',
   });
   child.on('exit', (code) => process.exit(code || 1));
 }
