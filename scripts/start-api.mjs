@@ -6,7 +6,14 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
 const apiDir = join(root, 'apps/api');
-const mainJs = join(apiDir, 'dist', 'main.js');
+
+function resolveMainJs() {
+  const candidates = [
+    join(apiDir, 'dist', 'main.js'),
+    join(apiDir, 'dist', 'src', 'main.js'),
+  ];
+  return candidates.find((p) => existsSync(p)) || null;
+}
 
 const dataDir = process.env.DATA_DIR || join(root, 'data');
 const uploadDir = process.env.UPLOAD_DIR || join(dataDir, 'uploads');
@@ -41,27 +48,30 @@ function run(command, args, cwd = apiDir) {
 }
 
 async function ensureBuilt() {
-  if (existsSync(mainJs)) {
+  let mainJs = resolveMainJs();
+  if (mainJs) {
     console.log('Found API build at', mainJs);
-    return;
+    return mainJs;
   }
-  console.log('dist/main.js missing — building now…');
+  console.log('dist missing — building now…');
   console.log('apiDir contents:', readdirSync(apiDir).join(', '));
   await run('npx', ['prisma', 'generate']);
   await run('npx', ['nest', 'build']);
-  if (!existsSync(mainJs)) {
-    throw new Error(`Still missing ${mainJs} after nest build`);
+  mainJs = resolveMainJs();
+  if (!mainJs) {
+    throw new Error('Still missing dist/main.js after nest build');
   }
+  return mainJs;
 }
 
 async function main() {
-  await ensureBuilt();
+  const mainJs = await ensureBuilt();
 
   console.log('DB push + seed…');
   await run('npx', ['prisma', 'db', 'push', '--skip-generate']);
   await run('npx', ['prisma', 'db', 'seed']);
 
-  console.log('Starting API on port', process.env.PORT);
+  console.log('Starting API on port', process.env.PORT, '→', mainJs);
   const child = spawn(process.execPath, [mainJs], {
     cwd: apiDir,
     env: process.env,
