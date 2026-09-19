@@ -1,17 +1,13 @@
-# Free-tier friendly: no disk (photos go to Vercel Blob when BLOB token is set).
-# For a paid disk instead, see DEPLOY.md "Option with card".
 services:
   - type: web
     name: dasma-api
     runtime: node
     plan: free
     region: frankfurt
-    buildCommand: npm ci && npm run db:generate -w @dregz/api && npm run build -w @dregz/api
+    buildCommand: npm ci --include=dev && npm run db:generate -w @dregz/api && npm run build -w @dregz/api
     startCommand: node scripts/start-api.mjs
     healthCheckPath: /api/events/wedding
     envVars:
-      - key: NODE_ENV
-        value: production
       - key: ADMIN_PASSWORD
         value: kosovarepublik99
       - key: EVENT_CODE
