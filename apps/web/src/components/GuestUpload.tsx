@@ -13,25 +13,41 @@ type QueueItem = {
   id: string;
   file: File;
   progress: number;
-  status: 'pending' | 'uploading' | 'done' | 'error';
+  status: 'pending' | 'preparing' | 'uploading' | 'done' | 'error';
   error?: string;
 };
 
 const IMAGE_MIME = /^image\//;
 const VIDEO_MIME = /^video\//;
 
+function isMediaFile(file: File): boolean {
+  if (IMAGE_MIME.test(file.type) || VIDEO_MIME.test(file.type)) return true;
+  return /\.(jpe?g|png|gif|webp|heic|heif|mp4|mov|webm|m4v|3gp)$/i.test(
+    file.name,
+  );
+}
+
 async function prepareFile(file: File): Promise<File> {
+  // Skip compression for already-small photos (fast path)
   if (!IMAGE_MIME.test(file.type) || file.type === 'image/gif') {
     return file;
   }
+  if (file.size <= 3 * 1024 * 1024) {
+    return file;
+  }
+
   try {
-    return await imageCompression(file, {
+    const compressed = imageCompression(file, {
       maxSizeMB: 3,
       maxWidthOrHeight: 2560,
       useWebWorker: true,
       fileType: 'image/jpeg',
       initialQuality: 0.82,
     });
+    const timeout = new Promise<File>((resolve) => {
+      setTimeout(() => resolve(file), 10000);
+    });
+    return await Promise.race([compressed, timeout]);
   } catch {
     return file;
   }
@@ -42,14 +58,29 @@ type Props = {
 };
 
 export function GuestUpload({ code }: Props) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [event, setEvent] = useState<EventInfo | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [guestName, setGuestName] = useState('');
   const [queue, setQueue] = useState<QueueItem[]>([]);
+  const queueRef = useRef<QueueItem[]>([]);
   const [dragging, setDragging] = useState(false);
   const [doneCount, setDoneCount] = useState(0);
   const uploading = useRef(false);
+  const guestNameRef = useRef(guestName);
+  guestNameRef.current = guestName;
+
+  const patchQueue = useCallback(
+    (updater: (prev: QueueItem[]) => QueueItem[]) => {
+      setQueue((prev) => {
+        const next = updater(prev);
+        queueRef.current = next;
+        return next;
+      });
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -69,51 +100,63 @@ export function GuestUpload({ code }: Props) {
     if (uploading.current) return;
     uploading.current = true;
 
-    while (true) {
-      let next: QueueItem | undefined;
-      setQueue((prev) => {
-        next = prev.find((i) => i.status === 'pending');
-        return prev;
-      });
-      if (!next) break;
+    try {
+      while (true) {
+        const next = queueRef.current.find((i) => i.status === 'pending');
+        if (!next) break;
 
-      const item = next;
-      setQueue((prev) =>
-        prev.map((i) =>
-          i.id === item.id ? { ...i, status: 'uploading', progress: 0 } : i,
-        ),
-      );
+        patchQueue((prev) =>
+          prev.map((i) =>
+            i.id === next.id ? { ...i, status: 'preparing', progress: 0 } : i,
+          ),
+        );
 
-      try {
-        const prepared = await prepareFile(item.file);
-        await uploadFile(code, prepared, guestName || undefined, (pct) => {
-          setQueue((prev) =>
+        try {
+          const prepared = await prepareFile(next.file);
+
+          patchQueue((prev) =>
             prev.map((i) =>
-              i.id === item.id ? { ...i, progress: pct } : i,
+              i.id === next.id ? { ...i, status: 'uploading', progress: 0 } : i,
             ),
           );
-        });
-        setQueue((prev) =>
-          prev.map((i) =>
-            i.id === item.id
-              ? { ...i, status: 'done', progress: 100 }
-              : i,
-          ),
-        );
-        setDoneCount((c) => c + 1);
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : 'Ngarkimi dështoi';
-        setQueue((prev) =>
-          prev.map((i) =>
-            i.id === item.id ? { ...i, status: 'error', error: message } : i,
-          ),
-        );
-      }
-    }
 
-    uploading.current = false;
-  }, [code, guestName]);
+          await uploadFile(
+            code,
+            prepared,
+            guestNameRef.current || undefined,
+            (pct) => {
+              patchQueue((prev) =>
+                prev.map((i) =>
+                  i.id === next.id ? { ...i, progress: pct } : i,
+                ),
+              );
+            },
+          );
+
+          patchQueue((prev) =>
+            prev.map((i) =>
+              i.id === next.id
+                ? { ...i, status: 'done', progress: 100 }
+                : i,
+            ),
+          );
+          setDoneCount((c) => c + 1);
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : 'Ngarkimi dështoi';
+          patchQueue((prev) =>
+            prev.map((i) =>
+              i.id === next.id
+                ? { ...i, status: 'error', error: message }
+                : i,
+            ),
+          );
+        }
+      }
+    } finally {
+      uploading.current = false;
+    }
+  }, [code, patchQueue]);
 
   useEffect(() => {
     if (queue.some((i) => i.status === 'pending')) {
@@ -122,9 +165,7 @@ export function GuestUpload({ code }: Props) {
   }, [queue, processQueue]);
 
   function addFiles(files: FileList | File[]) {
-    const list = Array.from(files).filter(
-      (f) => IMAGE_MIME.test(f.type) || VIDEO_MIME.test(f.type),
-    );
+    const list = Array.from(files).filter(isMediaFile);
     if (!list.length) return;
     const items: QueueItem[] = list.map((file) => ({
       id: `${file.name}-${file.size}-${file.lastModified}-${Math.random()}`,
@@ -132,7 +173,7 @@ export function GuestUpload({ code }: Props) {
       progress: 0,
       status: 'pending',
     }));
-    setQueue((prev) => [...prev, ...items]);
+    patchQueue((prev) => [...prev, ...items]);
   }
 
   if (loadError) {
@@ -202,22 +243,42 @@ export function GuestUpload({ code }: Props) {
             if (event.uploadEnabled) addFiles(e.dataTransfer.files);
           }}
         >
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={!event.uploadEnabled}
-            onClick={() => inputRef.current?.click()}
-          >
-            Zgjidhni foto &amp; video
-          </button>
+          <div className="hero-actions" style={{ marginTop: 0 }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={!event.uploadEnabled}
+              onClick={() => galleryInputRef.current?.click()}
+            >
+              Nga galeria
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={!event.uploadEnabled}
+              onClick={() => cameraInputRef.current?.click()}
+            >
+              Bëj foto
+            </button>
+          </div>
           <p>
-            Ose hidhni skedarët këtu · foto deri në 20MB · video deri në 200MB
+            Foto deri në 20MB · video deri në 200MB
           </p>
           <input
-            ref={inputRef}
+            ref={galleryInputRef}
+            type="file"
+            accept="image/*,video/*,.heic,.heif"
+            multiple
+            hidden
+            onChange={(e) => {
+              if (e.target.files) addFiles(e.target.files);
+              e.target.value = '';
+            }}
+          />
+          <input
+            ref={cameraInputRef}
             type="file"
             accept="image/*,video/*"
-            multiple
             capture="environment"
             hidden
             onChange={(e) => {
@@ -241,10 +302,20 @@ export function GuestUpload({ code }: Props) {
               <li key={item.id} className="file-row">
                 <span className="name">{item.file.name}</span>
                 <span className="meta">{formatBytes(item.file.size)}</span>
-                {item.status === 'uploading' && (
+                {(item.status === 'uploading' || item.status === 'preparing') && (
                   <div className="progress">
-                    <span style={{ width: `${item.progress}%` }} />
+                    <span
+                      style={{
+                        width: `${item.status === 'preparing' ? 8 : item.progress}%`,
+                      }}
+                    />
                   </div>
+                )}
+                {item.status === 'preparing' && (
+                  <span className="meta">Duke u përgatitur…</span>
+                )}
+                {item.status === 'uploading' && (
+                  <span className="meta">Duke u ngarkuar… {item.progress}%</span>
                 )}
                 {item.status === 'done' && (
                   <span className="meta status-ok">U ngarkua</span>
