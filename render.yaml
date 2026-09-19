@@ -1,19 +1,17 @@
+# Free-tier friendly: no disk (photos go to Vercel Blob when BLOB token is set).
+# For a paid disk instead, see DEPLOY.md "Option with card".
 services:
   - type: web
     name: dasma-api
-    runtime: docker
-    dockerfilePath: ./Dockerfile.api
-    plan: starter
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm ci && npm run db:generate -w @dregz/api && npm run build -w @dregz/api
+    startCommand: node scripts/start-api.mjs
     healthCheckPath: /api/events/wedding
     envVars:
       - key: NODE_ENV
         value: production
-      - key: DATA_DIR
-        value: /data
-      - key: UPLOAD_DIR
-        value: /data/uploads
-      - key: DATABASE_URL
-        value: file:/data/dregz.db
       - key: ADMIN_PASSWORD
         value: kosovarepublik99
       - key: EVENT_CODE
@@ -24,15 +22,19 @@ services:
         value: "6"
       - key: MAX_VIDEO_BYTES
         value: "209715200"
+      - key: DATA_DIR
+        value: /opt/render/project/src/data
+      - key: UPLOAD_DIR
+        value: /opt/render/project/src/data/uploads
+      - key: DATABASE_URL
+        value: file:/opt/render/project/src/data/dregz.db
       - key: JWT_SECRET
         generateValue: true
       - key: PUBLIC_WEB_URL
         value: https://dasma-drenushes-dhe-egzonit.vercel.app
       - key: CORS_ORIGIN
-        value: https://dasma-drenushes-dhe-egzonit.vercel.app,https://dasma-drenushes-dhe-egzonit-lirim-hasanis-projects.vercel.app
+        value: https://dasma-drenushes-dhe-egzonit.vercel.app
       - key: PUBLIC_API_URL
         sync: false
-    disk:
-      name: dasma-data
-      mountPath: /data
-      sizeGB: 10
+      - key: BLOB_READ_WRITE_TOKEN
+        sync: false

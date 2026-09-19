@@ -95,18 +95,19 @@ export class UploadService {
         extname(file.originalname).replace('.', '').toLowerCase() ||
         (type === 'image' ? 'jpg' : 'mp4');
 
+      const imageBuffer =
+        type === 'image' ? await readFile(file.path) : null;
+
       const { storageKey, size } = await this.storage.moveUploadedFile(
         file.path,
         ext,
+        mimeType,
       );
 
       let thumbKey: string | null = null;
-      if (type === 'image') {
+      if (imageBuffer) {
         try {
-          const buffer = await readFile(
-            this.storage.getAbsolutePath(storageKey),
-          );
-          thumbKey = await this.storage.createImageThumb(buffer);
+          thumbKey = await this.storage.createImageThumb(imageBuffer);
         } catch {
           thumbKey = null;
         }
